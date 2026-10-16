@@ -43,11 +43,13 @@ export function createChromeMock() {
     proxy: {
       settings: {
         get: (_opts, cb) => cb({ value: proxyValue }),
-        set: ({ value }) => {
+        set: ({ value }, cb) => {
           proxyValue = value;
+          if (typeof cb === 'function') cb();
         },
-        clear: () => {
+        clear: (_opts, cb) => {
           proxyValue = { mode: 'system' };
+          if (typeof cb === 'function') cb();
         },
         _getValue: () => proxyValue
       }
