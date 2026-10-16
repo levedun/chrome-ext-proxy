@@ -4,6 +4,7 @@ import {
   parseProxyList,
   serializeProfiles
 } from './lib/proxy-list.js';
+import { countryFlagEmoji } from './lib/geo.js';
 
 document.addEventListener('DOMContentLoaded', () => {
   if (window.__proxyManagerPopupInit) return;
@@ -41,7 +42,9 @@ document.addEventListener('DOMContentLoaded', () => {
   let editingId = null;
   let healthById = {};
   let healthRunning = false;
+  let healthCheckingId = null;
   let healthPollTimer = null;
+  let deadGroupOpen = false;
 
   const ICON_MORE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="5" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.5" fill="currentColor" stroke="none"/></svg>`;
 
@@ -132,12 +135,6 @@ document.addEventListener('DOMContentLoaded', () => {
     profilesMenuBtn.setAttribute('aria-expanded', 'false');
   }
 
-  function closeItemMenus(except) {
-    profilesDiv.querySelectorAll('.item-menu.open').forEach((el) => {
-      if (el !== except) el.classList.remove('open');
-    });
-  }
-
   function updateCheckButton(hasCustoms) {
     checkBtn.classList.toggle('hidden', !hasCustoms);
     checkBtn.disabled = healthRunning || !hasCustoms;
@@ -145,7 +142,10 @@ document.addEventListener('DOMContentLoaded', () => {
     checkBtn.title = healthRunning ? 'Проверка…' : 'Проверить прокси';
   }
 
-  function pingLabel(entry) {
+  function pingLabel(entry, isChecking) {
+    if (isChecking) {
+      return { text: '…', className: 'ping pending', title: 'проверка…' };
+    }
     if (!entry) return { text: '', className: 'ping' };
     if (entry.ok) {
       return { text: `${entry.ms} ms`, className: 'ping ok' };
@@ -153,11 +153,52 @@ document.addEventListener('DOMContentLoaded', () => {
     return { text: 'fail', className: 'ping bad', title: entry.error || 'недоступен' };
   }
 
+  function flagHtml(entry) {
+    if (!entry) return '';
+    if (entry.local) {
+      return `<span class="profile-flag" title="Локальный">🏠</span>`;
+    }
+    const emoji = countryFlagEmoji(entry.countryCode);
+    if (!emoji) return '';
+    const title = entry.country || entry.countryCode || '';
+    return `<span class="profile-flag" title="${escapeHtml(title)}">${emoji}</span>`;
+  }
+
+  function partitionProfiles(customs) {
+    const pending = [];
+    const alive = [];
+    const dead = [];
+    const hasAnyResult = customs.some((p) => healthById[p.id]);
+
+    for (const p of customs) {
+      const health = healthById[p.id];
+      const checking = healthRunning && healthCheckingId === p.id;
+      if (checking || (healthRunning && !health)) {
+        pending.push(p);
+      } else if (health && health.ok === true) {
+        alive.push(p);
+      } else if (health && health.ok === false) {
+        dead.push(p);
+      } else {
+        pending.push(p);
+      }
+    }
+
+    alive.sort((a, b) => {
+      const ma = healthById[a.id]?.ms ?? Number.POSITIVE_INFINITY;
+      const mb = healthById[b.id]?.ms ?? Number.POSITIVE_INFINITY;
+      return ma - mb;
+    });
+
+    return { pending, alive, dead, grouped: hasAnyResult || healthRunning };
+  }
+
   async function refreshHealthState() {
     const res = await chrome.runtime.sendMessage({ action: 'getHealth' });
     const health = res.health || { byId: {}, running: false };
     healthById = health.byId || {};
     healthRunning = Boolean(health.running);
+    healthCheckingId = health.checkingId || null;
     return health;
   }
 
@@ -280,6 +321,183 @@ document.addEventListener('DOMContentLoaded', () => {
     return chrome.runtime.sendMessage({ action: 'saveProfiles', profiles });
   }
 
+  function positionItemMenu(moreBtn, itemMenu) {
+    const rect = moreBtn.getBoundingClientRect();
+    const menuWidth = 168;
+    const pad = 8;
+    let top = rect.bottom + 4;
+    let right = Math.max(pad, window.innerWidth - rect.right);
+
+    itemMenu.style.left = 'auto';
+    itemMenu.style.right = `${right}px`;
+    itemMenu.style.top = `${top}px`;
+    itemMenu.style.minWidth = `${menuWidth}px`;
+
+    // если не влезает вниз — открыть вверх
+    requestAnimationFrame(() => {
+      const m = itemMenu.getBoundingClientRect();
+      if (m.bottom > window.innerHeight - pad) {
+        itemMenu.style.top = `${Math.max(pad, rect.top - m.height - 4)}px`;
+      }
+      if (m.left < pad) {
+        itemMenu.style.right = `${Math.max(pad, window.innerWidth - pad - menuWidth)}px`;
+      }
+    });
+  }
+
+  function closeItemMenus(except) {
+    profilesDiv.querySelectorAll('.item-menu.open').forEach((el) => {
+      if (el !== except) {
+        el.classList.remove('open');
+        el.style.top = '';
+        el.style.right = '';
+        el.style.left = '';
+      }
+    });
+    profilesDiv.querySelectorAll('.profile.menu-open').forEach((el) => {
+      if (!except || !el.contains(except)) el.classList.remove('menu-open');
+    });
+  }
+
+  function createProfileCard(p, profiles, activeId, isProxyActive) {
+    const div = document.createElement('div');
+    const isOn = isProxyActive && p.id === activeId;
+    const health = healthById[p.id];
+    const checking = healthRunning && healthCheckingId === p.id;
+    const dead = health && health.ok === false && !checking;
+    const switchable = !dead && !checking;
+    div.className =
+      'profile' +
+      (isOn ? ' active' : '') +
+      (dead ? ' dead' : '') +
+      (checking ? ' checking' : '');
+    div.dataset.id = p.id;
+
+    const subtitle = `${p.type.toUpperCase()}://${p.host}:${p.port}`;
+    const ping = pingLabel(health, checking);
+    const pingHtml = ping.text
+      ? `<span class="${ping.className}" title="${escapeHtml(ping.title || ping.text)}">${escapeHtml(ping.text)}</span>`
+      : '';
+    const flag = flagHtml(health);
+
+    div.innerHTML = `
+      <span class="status-indicator ${isOn ? 'live' : ''}" aria-hidden="true"></span>
+      <div class="profile-info">
+        <div class="profile-title">
+          ${pingHtml}
+          <strong title="${escapeHtml(p.name)}">${escapeHtml(p.name)}</strong>
+        </div>
+        <div class="profile-endpoint">
+          ${flag}
+          <small title="${escapeHtml(subtitle)}">${escapeHtml(subtitle)}</small>
+        </div>
+      </div>
+      <div class="profile-actions">
+        <label class="switch" title="${dead ? 'Недоступен' : checking ? 'Проверка…' : isOn ? 'Выключить' : 'Включить'}">
+          <input type="checkbox" role="switch" ${isOn ? 'checked' : ''} ${switchable ? '' : 'disabled'} aria-label="Прокси «${escapeHtml(p.name)}»">
+          <span class="switch-slider" aria-hidden="true"></span>
+        </label>
+        <div class="menu-wrap">
+          <button type="button" class="icon-btn btn-more" title="Действия" aria-label="Действия профиля" aria-haspopup="true">${ICON_MORE}</button>
+          <div class="menu-dropdown item-menu" role="menu">
+            <button type="button" class="btn-edit" role="menuitem">Редактировать</button>
+            <button type="button" class="btn-dup" role="menuitem">Дублировать</button>
+            <button type="button" class="btn-del danger" role="menuitem">Удалить</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const switchInput = div.querySelector('input[type="checkbox"]');
+    switchInput.addEventListener('change', () => {
+      if (!switchable) {
+        switchInput.checked = false;
+        return;
+      }
+      const turnOn = switchInput.checked;
+      if (turnOn) {
+        profilesDiv.querySelectorAll('input[type="checkbox"]').forEach((el) => {
+          if (el !== switchInput) el.checked = false;
+        });
+        profilesDiv.querySelectorAll('.profile').forEach((el) => {
+          if (el !== div) {
+            el.classList.remove('active');
+            el.querySelector('.status-indicator')?.classList.remove('live');
+          }
+        });
+        div.classList.add('active');
+        div.querySelector('.status-indicator')?.classList.add('live');
+      } else {
+        div.classList.remove('active');
+        div.querySelector('.status-indicator')?.classList.remove('live');
+      }
+
+      switchInput.disabled = true;
+      const done = turnOn ? enableProfile(p.id) : disableProxy();
+      done.finally(() => {
+        switchInput.disabled = dead;
+      });
+    });
+
+    const moreBtn = div.querySelector('.btn-more');
+    const itemMenu = div.querySelector('.item-menu');
+    moreBtn.onclick = (e) => {
+      e.stopPropagation();
+      const willOpen = !itemMenu.classList.contains('open');
+      closeItemMenus();
+      closeProfilesMenu();
+      if (willOpen) {
+        div.classList.add('menu-open');
+        itemMenu.classList.add('open');
+        positionItemMenu(moreBtn, itemMenu);
+      }
+    };
+
+    div.querySelector('.btn-edit').onclick = (e) => {
+      e.stopPropagation();
+      closeItemMenus();
+      openFormView({ profile: p, asEdit: true });
+    };
+
+    div.querySelector('.btn-dup').onclick = (e) => {
+      e.stopPropagation();
+      closeItemMenus();
+      const next = [...profiles];
+      next.push({
+        id: Date.now().toString(),
+        name: uniqueCopyName(p.name, next),
+        type: p.type,
+        host: p.host,
+        port: p.port
+      });
+      saveProfilesList(next).then(() => {
+        showToast('Профиль скопирован.');
+        setTimeout(() => render(), 80);
+      });
+    };
+
+    div.querySelector('.btn-del').onclick = (e) => {
+      e.stopPropagation();
+      closeItemMenus();
+      if (!confirm(`Удалить профиль «${p.name}»?`)) return;
+
+      const updatedProfiles = profiles.filter((x) => x.id !== p.id);
+      saveProfilesList(updatedProfiles).then(() => {
+        const afterDelete = () => {
+          viewMode = null;
+          setTimeout(() => render(), 80);
+        };
+        if (isOn) {
+          chrome.runtime.sendMessage({ action: 'stopProxy' }).then(afterDelete);
+        } else {
+          afterDelete();
+        }
+      });
+    };
+
+    return div;
+  }
+
   async function renderProfiles(profiles, activeId, token) {
     const [statusRes] = await Promise.all([
       chrome.runtime.sendMessage({ action: 'getProxyStatus' }),
@@ -291,6 +509,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const isProxyActive = Boolean(statusRes.active && activeId !== 'default');
     updateStatus(isProxyActive, activeProfile);
 
+    // сохранить состояние спойлера до перерисовки
+    const prevDead = profilesDiv.querySelector('.dead-group');
+    if (prevDead) deadGroupOpen = prevDead.open;
+
     profilesDiv.innerHTML = '';
     const customs = customProfiles(profiles);
     if (profilesEmpty) {
@@ -298,132 +520,60 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     updateCheckButton(customs.length > 0);
 
-    customs.forEach((p) => {
-      const div = document.createElement('div');
-      const isOn = isProxyActive && p.id === activeId;
-      const health = healthById[p.id];
-      const dead = health && health.ok === false;
-      const switchable = !dead;
-      div.className = 'profile' + (isOn ? ' active' : '') + (dead ? ' dead' : '');
+    const appendCard = (parent, p) => {
+      parent.appendChild(createProfileCard(p, profiles, activeId, isProxyActive));
+    };
 
-      const subtitle = `${p.type.toUpperCase()}://${p.host}:${p.port}`;
-      const ping = pingLabel(health);
-      const pingHtml = ping.text
-        ? `<span class="${ping.className}" title="${escapeHtml(ping.title || ping.text)}">${escapeHtml(ping.text)}</span>`
-        : healthRunning
-          ? `<span class="ping pending">…</span>`
-          : '';
+    const { pending, alive, dead, grouped } = partitionProfiles(customs);
 
-      div.innerHTML = `
-        <span class="status-indicator ${isOn ? 'live' : ''}" aria-hidden="true"></span>
-        <div class="profile-info">
-          <div class="profile-title">
-            ${pingHtml}
-            <strong title="${escapeHtml(p.name)}">${escapeHtml(p.name)}</strong>
-          </div>
-          <small title="${escapeHtml(subtitle)}">${escapeHtml(subtitle)}</small>
-        </div>
-        <div class="profile-actions">
-          <label class="switch" title="${dead ? 'Недоступен' : isOn ? 'Выключить' : 'Включить'}">
-            <input type="checkbox" role="switch" ${isOn ? 'checked' : ''} ${switchable ? '' : 'disabled'} aria-label="Прокси «${escapeHtml(p.name)}»">
-            <span class="switch-slider" aria-hidden="true"></span>
-          </label>
-          <div class="menu-wrap">
-            <button type="button" class="icon-btn btn-more" title="Действия" aria-label="Действия профиля" aria-haspopup="true">${ICON_MORE}</button>
-            <div class="menu-dropdown item-menu" role="menu">
-              <button type="button" class="btn-edit" role="menuitem">Редактировать</button>
-              <button type="button" class="btn-dup" role="menuitem">Дублировать</button>
-              <button type="button" class="btn-del danger" role="menuitem">Удалить</button>
-            </div>
-          </div>
-        </div>
-      `;
+    if (!grouped) {
+      customs.forEach((p) => appendCard(profilesDiv, p));
+      return;
+    }
 
-      const switchInput = div.querySelector('input[type="checkbox"]');
-      switchInput.addEventListener('change', () => {
-        if (!switchable) {
-          switchInput.checked = false;
-          return;
-        }
-        const turnOn = switchInput.checked;
-        if (turnOn) {
-          profilesDiv.querySelectorAll('input[type="checkbox"]').forEach((el) => {
-            if (el !== switchInput) el.checked = false;
-          });
-          profilesDiv.querySelectorAll('.profile').forEach((el) => {
-            if (el !== div) {
-              el.classList.remove('active');
-              el.querySelector('.status-indicator')?.classList.remove('live');
-            }
-          });
-          div.classList.add('active');
-          div.querySelector('.status-indicator')?.classList.add('live');
-        } else {
-          div.classList.remove('active');
-          div.querySelector('.status-indicator')?.classList.remove('live');
-        }
+    if (pending.length) {
+      const wrap = document.createElement('div');
+      wrap.className = 'profile-group';
+      if (alive.length || dead.length || healthRunning) {
+        const label = document.createElement('p');
+        label.className = 'profile-group-label';
+        const title = healthRunning ? 'Проверка' : 'Не проверены';
+        label.innerHTML = `${title} <span class="count">${pending.length}</span>`;
+        wrap.appendChild(label);
+      }
+      pending.forEach((p) => appendCard(wrap, p));
+      profilesDiv.appendChild(wrap);
+    }
 
-        switchInput.disabled = true;
-        const done = turnOn ? enableProfile(p.id) : disableProxy();
-        done.finally(() => {
-          switchInput.disabled = dead;
-        });
+    if (alive.length) {
+      const wrap = document.createElement('div');
+      wrap.className = 'profile-group';
+      const label = document.createElement('p');
+      label.className = 'profile-group-label';
+      label.innerHTML = `Работает <span class="count">${alive.length}</span>`;
+      wrap.appendChild(label);
+      alive.forEach((p) => appendCard(wrap, p));
+      profilesDiv.appendChild(wrap);
+    }
+
+    if (dead.length) {
+      const details = document.createElement('details');
+      details.className = 'dead-group';
+      details.open = deadGroupOpen;
+      details.addEventListener('toggle', () => {
+        deadGroupOpen = details.open;
       });
 
-      const moreBtn = div.querySelector('.btn-more');
-      const itemMenu = div.querySelector('.item-menu');
-      moreBtn.onclick = (e) => {
-        e.stopPropagation();
-        const willOpen = !itemMenu.classList.contains('open');
-        closeItemMenus();
-        closeProfilesMenu();
-        itemMenu.classList.toggle('open', willOpen);
-      };
+      const summary = document.createElement('summary');
+      summary.innerHTML = `Не работает <span class="count">${dead.length}</span>`;
+      details.appendChild(summary);
 
-      div.querySelector('.btn-edit').onclick = (e) => {
-        e.stopPropagation();
-        closeItemMenus();
-        openFormView({ profile: p, asEdit: true });
-      };
-
-      div.querySelector('.btn-dup').onclick = (e) => {
-        e.stopPropagation();
-        closeItemMenus();
-        const next = [...profiles];
-        next.push({
-          id: Date.now().toString(),
-          name: uniqueCopyName(p.name, next),
-          type: p.type,
-          host: p.host,
-          port: p.port
-        });
-        saveProfilesList(next).then(() => {
-          showToast('Профиль скопирован.');
-          setTimeout(() => render(), 80);
-        });
-      };
-
-      div.querySelector('.btn-del').onclick = (e) => {
-        e.stopPropagation();
-        closeItemMenus();
-        if (!confirm(`Удалить профиль «${p.name}»?`)) return;
-
-        const updatedProfiles = profiles.filter((x) => x.id !== p.id);
-        saveProfilesList(updatedProfiles).then(() => {
-          const afterDelete = () => {
-            viewMode = null;
-            setTimeout(() => render(), 80);
-          };
-          if (isOn) {
-            chrome.runtime.sendMessage({ action: 'stopProxy' }).then(afterDelete);
-          } else {
-            afterDelete();
-          }
-        });
-      };
-
-      profilesDiv.appendChild(div);
-    });
+      const list = document.createElement('div');
+      list.className = 'dead-list';
+      dead.forEach((p) => appendCard(list, p));
+      details.appendChild(list);
+      profilesDiv.appendChild(details);
+    }
   }
 
   async function render() {
@@ -525,6 +675,8 @@ document.addEventListener('DOMContentLoaded', () => {
       closeItemMenus();
     }
   });
+
+  profilesDiv.addEventListener('scroll', () => closeItemMenus(), { passive: true });
 
   menuExport.onclick = () => exportProfiles();
   menuImport.onclick = () => {
