@@ -1,0 +1,16 @@
+{
+    "name": "Proxy Manager",
+    "version": "1.0.0",
+    "description": "Простой прокси-менеджер: HTTP/SOCKS5, профили, переключение",
+    "manifest_version": 3,
+    "permissions": [
+      "proxy",
+      "storage"
+    ],
+    "background": {
+      "service_worker": "background.js"
+    },
+    "action": {
+      "default_popup": "popup.html"
+    }
+  }
