@@ -1,4 +1,8 @@
 document.addEventListener('DOMContentLoaded', () => {
+  // Защита от повторной инициализации (если скрипт всё же подключён дважды)
+  if (window.__proxyManagerPopupInit) return;
+  window.__proxyManagerPopupInit = true;
+
   const profilesDiv = document.getElementById('profiles');
   const addBtn = document.getElementById('add');
   const stopBtn = document.getElementById('stopBtn');
@@ -9,6 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const statusPill = document.getElementById('statusPill');
   const statusText = document.getElementById('statusText');
   const toast = document.getElementById('toast');
+  let renderToken = 0;
 
   function escapeHtml(value) {
     return String(value)
@@ -77,14 +82,17 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   };
 
-  async function renderProfiles(profiles, activeId) {
+  async function renderProfiles(profiles, activeId, token) {
     profilesDiv.innerHTML = '';
 
     const statusRes = await chrome.runtime.sendMessage({ action: 'getProxyStatus' });
+    if (token !== renderToken) return;
+
     const activeProfile = profiles.find((p) => p.id === activeId) || profiles[0];
     const isProxyActive = Boolean(statusRes.active && activeId !== 'default');
     updateStatus(isProxyActive, activeProfile);
 
+    profilesDiv.innerHTML = '';
     profiles.forEach((p) => {
       const div = document.createElement('div');
       const isActive = p.id === activeId;
@@ -141,11 +149,13 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function render() {
+    const token = ++renderToken;
     const [profilesRes, activeRes] = await Promise.all([
       chrome.runtime.sendMessage({ action: 'getProfiles' }),
       chrome.runtime.sendMessage({ action: 'getActive' })
     ]);
-    await renderProfiles(profilesRes.profiles, activeRes.profile.id);
+    if (token !== renderToken) return;
+    await renderProfiles(profilesRes.profiles, activeRes.profile.id, token);
   }
 
   [nameInput, hostInput, portInput].forEach((input) => {
