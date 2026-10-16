@@ -25,6 +25,11 @@ describe('buildProxyConfig', () => {
     expect(config.rules.singleProxy.scheme).toBe('socks5');
     expect(config.rules.singleProxy.port).toBe(1080);
   });
+
+  it('собирает socks4-конфиг', () => {
+    const config = buildProxyConfig({ type: 'socks4', host: '8.8.8.8', port: '1080' });
+    expect(config.rules.singleProxy.scheme).toBe('socks4');
+  });
 });
 
 describe('setProxy / clearProxy / getProxyStatus', () => {

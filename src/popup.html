@@ -144,6 +144,100 @@
       color: var(--muted);
     }
 
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .section-head .section-label {
+      margin: 0;
+    }
+
+    .menu-wrap {
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .icon-btn {
+      width: 28px;
+      height: 28px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      flex-shrink: 0;
+      padding: 0;
+    }
+
+    .icon-btn svg {
+      width: 16px;
+      height: 16px;
+      display: block;
+    }
+
+    .icon-btn:hover {
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+
+    .icon-btn.danger:hover {
+      background: var(--danger-soft);
+      color: var(--danger);
+    }
+
+    .menu-dropdown {
+      display: none;
+      position: absolute;
+      right: 0;
+      top: calc(100% + 4px);
+      min-width: 160px;
+      padding: 6px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      box-shadow: 0 8px 24px rgba(26, 43, 40, 0.12);
+      z-index: 20;
+    }
+
+    .menu-dropdown.open {
+      display: block;
+    }
+
+    .menu-dropdown button {
+      width: 100%;
+      display: block;
+      text-align: left;
+      border: none;
+      background: transparent;
+      color: var(--text);
+      font: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 8px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    .menu-dropdown button:hover {
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+
+    .menu-dropdown button.danger {
+      color: var(--danger);
+    }
+
+    .menu-dropdown button.danger:hover {
+      background: var(--danger-soft);
+    }
+
     #profiles {
       display: flex;
       flex-direction: column;
@@ -181,6 +275,9 @@
       font-size: 13px;
       font-weight: 650;
       margin-bottom: 2px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .profile-info small {
@@ -211,27 +308,6 @@
       gap: 6px;
       flex-shrink: 0;
       margin-left: auto;
-    }
-
-    .delete {
-      width: 28px;
-      height: 28px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      border: none;
-      border-radius: 8px;
-      background: transparent;
-      color: var(--muted);
-      font-size: 18px;
-      line-height: 1;
-      cursor: pointer;
-      flex-shrink: 0;
-    }
-
-    .delete:hover {
-      background: var(--danger-soft);
-      color: var(--danger);
     }
 
     .switch {
@@ -422,8 +498,25 @@
   </header>
 
   <section id="viewList" class="view">
-    <p class="section-label">Профили</p>
+    <div class="section-head">
+      <p class="section-label">Профили</p>
+      <div class="menu-wrap">
+        <button id="profilesMenuBtn" class="icon-btn" type="button" title="Меню" aria-label="Меню профилей" aria-haspopup="true" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <circle cx="12" cy="5" r="1.5" fill="currentColor" stroke="none"/>
+            <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/>
+            <circle cx="12" cy="19" r="1.5" fill="currentColor" stroke="none"/>
+          </svg>
+        </button>
+        <div id="profilesMenu" class="menu-dropdown" role="menu">
+          <button type="button" id="menuExport" role="menuitem">Экспорт</button>
+          <button type="button" id="menuImport" role="menuitem">Загрузить</button>
+          <button type="button" id="menuDeleteAll" class="danger" role="menuitem">Удалить все</button>
+        </div>
+      </div>
+    </div>
     <div id="profiles"></div>
+    <input type="file" id="importFile" accept=".txt,text/plain" hidden>
     <button id="showAddBtn" class="btn btn-primary" type="button">Добавить</button>
   </section>
 
@@ -443,6 +536,7 @@
           <label for="type">Тип</label>
           <select id="type">
             <option value="http">HTTP</option>
+            <option value="socks4">SOCKS4</option>
             <option value="socks5">SOCKS5</option>
           </select>
         </div>
@@ -456,8 +550,9 @@
         <input type="text" id="host" placeholder="1.2.3.4" autocomplete="off">
       </div>
       <button id="add" class="btn btn-primary" type="button" disabled>Добавить профиль</button>
-      <div id="toast" class="toast" role="status"></div>
     </div>
   </section>
+
+  <div id="toast" class="toast" role="status"></div>
 </body>
 </html>

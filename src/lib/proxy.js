@@ -4,11 +4,14 @@ export function buildProxyConfig(profile) {
     return null;
   }
 
+  const scheme =
+    profile.type === 'socks5' || profile.type === 'socks4' ? profile.type : 'http';
+
   return {
     mode: 'fixed_servers',
     rules: {
       singleProxy: {
-        scheme: profile.type === 'socks5' ? 'socks5' : 'http',
+        scheme,
         host: profile.host,
         port: parseInt(profile.port, 10)
       },
