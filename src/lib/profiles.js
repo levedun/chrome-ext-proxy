@@ -41,13 +41,13 @@ function dedupeById(profiles) {
   });
 }
 
-/** Нормализация списка: один дефолтный «Без прокси» первым */
+/** Нормализация списка: ровно один дефолтный «Без прокси» первым */
 export function normalizeProfiles(profiles) {
   const cleaned = dedupeById(profiles || []);
-  const defaultProfile =
-    cleaned.find((p) => p.id === 'default' && p.type === 'none') || DEFAULT_PROFILE;
-  const withoutNone = cleaned.filter((p) => p.id !== 'default' && p.type !== 'none');
-  return [defaultProfile, ...withoutNone];
+  const proxies = cleaned.filter(
+    (p) => p && p.id !== 'default' && p.type !== 'none' && p.host && p.port
+  );
+  return [{ ...DEFAULT_PROFILE }, ...proxies];
 }
 
 export async function loadProfiles() {
