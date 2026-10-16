@@ -156,6 +156,13 @@
       margin: 0;
     }
 
+    .section-tools {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      flex-shrink: 0;
+    }
+
     .menu-wrap {
       position: relative;
       flex-shrink: 0;
@@ -190,6 +197,23 @@
     .icon-btn.danger:hover {
       background: var(--danger-soft);
       color: var(--danger);
+    }
+
+    .icon-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .icon-btn.spin svg {
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .icon-btn.hidden {
+      display: none;
     }
 
     .menu-dropdown {
@@ -270,14 +294,47 @@
       min-width: 0;
     }
 
+    .profile-title {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      min-width: 0;
+      margin-bottom: 2px;
+    }
+
     .profile-info strong {
       display: block;
       font-size: 13px;
       font-weight: 650;
-      margin-bottom: 2px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      min-width: 0;
+    }
+
+    .ping {
+      flex-shrink: 0;
+      font-size: 10px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.01em;
+      color: var(--muted);
+    }
+
+    .ping.ok {
+      color: var(--ok);
+    }
+
+    .ping.bad {
+      color: var(--danger);
+    }
+
+    .ping.pending {
+      color: var(--accent);
+    }
+
+    .profile.dead {
+      opacity: 0.72;
     }
 
     .profile-info small {
@@ -500,18 +557,26 @@
   <section id="viewList" class="view">
     <div class="section-head">
       <p class="section-label">Профили</p>
-      <div class="menu-wrap">
-        <button id="profilesMenuBtn" class="icon-btn" type="button" title="Меню" aria-label="Меню профилей" aria-haspopup="true" aria-expanded="false">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-            <circle cx="12" cy="5" r="1.5" fill="currentColor" stroke="none"/>
-            <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/>
-            <circle cx="12" cy="19" r="1.5" fill="currentColor" stroke="none"/>
+      <div class="section-tools">
+        <button id="checkBtn" class="icon-btn hidden" type="button" title="Проверить прокси" aria-label="Проверить работоспособность">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 12a9 9 0 1 1-2.6-6.2"/>
+            <path d="M21 3v6h-6"/>
           </svg>
         </button>
-        <div id="profilesMenu" class="menu-dropdown" role="menu">
-          <button type="button" id="menuExport" role="menuitem">Экспорт</button>
-          <button type="button" id="menuImport" role="menuitem">Загрузить</button>
-          <button type="button" id="menuDeleteAll" class="danger" role="menuitem">Удалить все</button>
+        <div class="menu-wrap">
+          <button id="profilesMenuBtn" class="icon-btn" type="button" title="Меню" aria-label="Меню профилей" aria-haspopup="true" aria-expanded="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <circle cx="12" cy="5" r="1.5" fill="currentColor" stroke="none"/>
+              <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/>
+              <circle cx="12" cy="19" r="1.5" fill="currentColor" stroke="none"/>
+            </svg>
+          </button>
+          <div id="profilesMenu" class="menu-dropdown" role="menu">
+            <button type="button" id="menuExport" role="menuitem">Экспорт</button>
+            <button type="button" id="menuImport" role="menuitem">Загрузить</button>
+            <button type="button" id="menuDeleteAll" class="danger" role="menuitem">Удалить все</button>
+          </div>
         </div>
       </div>
     </div>

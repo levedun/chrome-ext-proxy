@@ -31,6 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const menuDeleteAll = document.getElementById('menuDeleteAll');
   const importFile = document.getElementById('importFile');
   const profilesEmpty = document.getElementById('profilesEmpty');
+  const checkBtn = document.getElementById('checkBtn');
 
   let renderToken = 0;
   /** 'list' | 'form' */
@@ -38,10 +39,11 @@ document.addEventListener('DOMContentLoaded', () => {
   let latestProfiles = [];
   /** null | profile id при редактировании */
   let editingId = null;
+  let healthById = {};
+  let healthRunning = false;
+  let healthPollTimer = null;
 
-  const ICON_EDIT = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>`;
-  const ICON_COPY = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>`;
-  const ICON_TRASH = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>`;
+  const ICON_MORE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="5" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.5" fill="currentColor" stroke="none"/></svg>`;
 
   function escapeHtml(value) {
     return String(value)
@@ -130,6 +132,80 @@ document.addEventListener('DOMContentLoaded', () => {
     profilesMenuBtn.setAttribute('aria-expanded', 'false');
   }
 
+  function closeItemMenus(except) {
+    profilesDiv.querySelectorAll('.item-menu.open').forEach((el) => {
+      if (el !== except) el.classList.remove('open');
+    });
+  }
+
+  function updateCheckButton(hasCustoms) {
+    checkBtn.classList.toggle('hidden', !hasCustoms);
+    checkBtn.disabled = healthRunning || !hasCustoms;
+    checkBtn.classList.toggle('spin', healthRunning);
+    checkBtn.title = healthRunning ? 'Проверка…' : 'Проверить прокси';
+  }
+
+  function pingLabel(entry) {
+    if (!entry) return { text: '', className: 'ping' };
+    if (entry.ok) {
+      return { text: `${entry.ms} ms`, className: 'ping ok' };
+    }
+    return { text: 'fail', className: 'ping bad', title: entry.error || 'недоступен' };
+  }
+
+  async function refreshHealthState() {
+    const res = await chrome.runtime.sendMessage({ action: 'getHealth' });
+    const health = res.health || { byId: {}, running: false };
+    healthById = health.byId || {};
+    healthRunning = Boolean(health.running);
+    return health;
+  }
+
+  function startHealthPoll() {
+    clearInterval(healthPollTimer);
+    healthPollTimer = setInterval(async () => {
+      await refreshHealthState();
+      updateCheckButton(hasCustomProfiles(latestProfiles));
+      if (!healthRunning) {
+        clearInterval(healthPollTimer);
+        healthPollTimer = null;
+        render();
+      } else {
+        // обновить пинги на лету без полного сброса фокуса меню
+        render();
+      }
+    }, 600);
+  }
+
+  async function runHealthCheck() {
+    if (healthRunning) return;
+    closeProfilesMenu();
+    closeItemMenus();
+    healthRunning = true;
+    updateCheckButton(true);
+    showToast('Проверка прокси…');
+    startHealthPoll();
+
+    const res = await chrome.runtime.sendMessage({ action: 'checkProxies' });
+    clearInterval(healthPollTimer);
+    healthPollTimer = null;
+
+    if (res.error) {
+      healthRunning = false;
+      updateCheckButton(hasCustomProfiles(latestProfiles));
+      showToast(`Ошибка проверки: ${res.error}`);
+      return;
+    }
+
+    healthById = (res.health && res.health.byId) || {};
+    healthRunning = false;
+    const entries = Object.values(healthById);
+    const ok = entries.filter((e) => e.ok).length;
+    const bad = entries.length - ok;
+    showToast(`Готово: ${ok} ок, ${bad} недоступны.`);
+    render();
+  }
+
   function setView(mode, profiles) {
     viewMode = mode;
 
@@ -205,7 +281,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function renderProfiles(profiles, activeId, token) {
-    const statusRes = await chrome.runtime.sendMessage({ action: 'getProxyStatus' });
+    const [statusRes] = await Promise.all([
+      chrome.runtime.sendMessage({ action: 'getProxyStatus' }),
+      refreshHealthState()
+    ]);
     if (token !== renderToken) return;
 
     const activeProfile = profiles.find((p) => p.id === activeId) || profiles[0];
@@ -217,32 +296,55 @@ document.addEventListener('DOMContentLoaded', () => {
     if (profilesEmpty) {
       profilesEmpty.hidden = customs.length > 0;
     }
+    updateCheckButton(customs.length > 0);
+
     customs.forEach((p) => {
       const div = document.createElement('div');
       const isOn = isProxyActive && p.id === activeId;
-      div.className = 'profile' + (isOn ? ' active' : '');
+      const health = healthById[p.id];
+      const dead = health && health.ok === false;
+      const switchable = !dead;
+      div.className = 'profile' + (isOn ? ' active' : '') + (dead ? ' dead' : '');
 
       const subtitle = `${p.type.toUpperCase()}://${p.host}:${p.port}`;
+      const ping = pingLabel(health);
+      const pingHtml = ping.text
+        ? `<span class="${ping.className}" title="${escapeHtml(ping.title || ping.text)}">${escapeHtml(ping.text)}</span>`
+        : healthRunning
+          ? `<span class="ping pending">…</span>`
+          : '';
 
       div.innerHTML = `
         <span class="status-indicator ${isOn ? 'live' : ''}" aria-hidden="true"></span>
         <div class="profile-info">
-          <strong title="${escapeHtml(p.name)}">${escapeHtml(p.name)}</strong>
+          <div class="profile-title">
+            ${pingHtml}
+            <strong title="${escapeHtml(p.name)}">${escapeHtml(p.name)}</strong>
+          </div>
           <small title="${escapeHtml(subtitle)}">${escapeHtml(subtitle)}</small>
         </div>
         <div class="profile-actions">
-          <button type="button" class="icon-btn btn-edit" title="Редактировать" aria-label="Редактировать">${ICON_EDIT}</button>
-          <button type="button" class="icon-btn btn-dup" title="Дублировать" aria-label="Дублировать">${ICON_COPY}</button>
-          <button type="button" class="icon-btn danger btn-del" title="Удалить" aria-label="Удалить">${ICON_TRASH}</button>
-          <label class="switch" title="${isOn ? 'Выключить' : 'Включить'}">
-            <input type="checkbox" role="switch" ${isOn ? 'checked' : ''} aria-label="Прокси «${escapeHtml(p.name)}»">
+          <label class="switch" title="${dead ? 'Недоступен' : isOn ? 'Выключить' : 'Включить'}">
+            <input type="checkbox" role="switch" ${isOn ? 'checked' : ''} ${switchable ? '' : 'disabled'} aria-label="Прокси «${escapeHtml(p.name)}»">
             <span class="switch-slider" aria-hidden="true"></span>
           </label>
+          <div class="menu-wrap">
+            <button type="button" class="icon-btn btn-more" title="Действия" aria-label="Действия профиля" aria-haspopup="true">${ICON_MORE}</button>
+            <div class="menu-dropdown item-menu" role="menu">
+              <button type="button" class="btn-edit" role="menuitem">Редактировать</button>
+              <button type="button" class="btn-dup" role="menuitem">Дублировать</button>
+              <button type="button" class="btn-del danger" role="menuitem">Удалить</button>
+            </div>
+          </div>
         </div>
       `;
 
       const switchInput = div.querySelector('input[type="checkbox"]');
       switchInput.addEventListener('change', () => {
+        if (!switchable) {
+          switchInput.checked = false;
+          return;
+        }
         const turnOn = switchInput.checked;
         if (turnOn) {
           profilesDiv.querySelectorAll('input[type="checkbox"]').forEach((el) => {
@@ -264,17 +366,29 @@ document.addEventListener('DOMContentLoaded', () => {
         switchInput.disabled = true;
         const done = turnOn ? enableProfile(p.id) : disableProxy();
         done.finally(() => {
-          switchInput.disabled = false;
+          switchInput.disabled = dead;
         });
       });
 
+      const moreBtn = div.querySelector('.btn-more');
+      const itemMenu = div.querySelector('.item-menu');
+      moreBtn.onclick = (e) => {
+        e.stopPropagation();
+        const willOpen = !itemMenu.classList.contains('open');
+        closeItemMenus();
+        closeProfilesMenu();
+        itemMenu.classList.toggle('open', willOpen);
+      };
+
       div.querySelector('.btn-edit').onclick = (e) => {
         e.stopPropagation();
+        closeItemMenus();
         openFormView({ profile: p, asEdit: true });
       };
 
       div.querySelector('.btn-dup').onclick = (e) => {
         e.stopPropagation();
+        closeItemMenus();
         const next = [...profiles];
         next.push({
           id: Date.now().toString(),
@@ -291,6 +405,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       div.querySelector('.btn-del').onclick = (e) => {
         e.stopPropagation();
+        closeItemMenus();
         if (!confirm(`Удалить профиль «${p.name}»?`)) return;
 
         const updatedProfiles = profiles.filter((x) => x.id !== p.id);
@@ -392,8 +507,11 @@ document.addEventListener('DOMContentLoaded', () => {
     setView('list', latestProfiles);
   };
 
+  checkBtn.onclick = () => runHealthCheck();
+
   profilesMenuBtn.onclick = (e) => {
     e.stopPropagation();
+    closeItemMenus();
     const open = !profilesMenu.classList.contains('open');
     profilesMenu.classList.toggle('open', open);
     profilesMenuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
@@ -402,6 +520,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('click', (e) => {
     if (!profilesMenu.contains(e.target) && e.target !== profilesMenuBtn) {
       closeProfilesMenu();
+    }
+    if (!e.target.closest('.profile-actions .menu-wrap')) {
+      closeItemMenus();
     }
   });
 
