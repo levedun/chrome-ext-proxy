@@ -118,13 +118,25 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   stopBtn.onclick = () => {
-    chrome.runtime.sendMessage({ action: 'stopProxy' }).then(() => {
-      setTimeout(() => render(), 80);
-    });
+    disableProxy();
   };
 
   showAddBtn.onclick = () => openFormView();
   backBtn.onclick = () => setView('list', latestProfiles);
+
+  function enableProfile(id) {
+    // Сначала прямое соединение (все свитчи «выкл»), затем нужный профиль
+    return chrome.runtime
+      .sendMessage({ action: 'stopProxy' })
+      .then(() => chrome.runtime.sendMessage({ action: 'activate', id }))
+      .then(() => setTimeout(() => render(), 80));
+  }
+
+  function disableProxy() {
+    return chrome.runtime.sendMessage({ action: 'stopProxy' }).then(() => {
+      setTimeout(() => render(), 80);
+    });
+  }
 
   async function renderProfiles(profiles, activeId, token) {
     const statusRes = await chrome.runtime.sendMessage({ action: 'getProxyStatus' });
@@ -135,58 +147,73 @@ document.addEventListener('DOMContentLoaded', () => {
     updateStatus(isProxyActive, activeProfile);
 
     profilesDiv.innerHTML = '';
-    profiles.forEach((p) => {
+    customProfiles(profiles).forEach((p) => {
       const div = document.createElement('div');
-      const isActive = p.id === activeId;
-      const isNoneProfile = p.type === 'none';
-      div.className = 'profile' + (isActive ? ' active' : '');
+      const isOn = isProxyActive && p.id === activeId;
+      div.className = 'profile' + (isOn ? ' active' : '');
 
-      const subtitle = isNoneProfile
-        ? 'Прямое соединение'
-        : `${p.type.toUpperCase()}://${p.host}:${p.port}`;
-
-      const live = isActive && isProxyActive;
+      const subtitle = `${p.type.toUpperCase()}://${p.host}:${p.port}`;
 
       div.innerHTML = `
-        <span class="status-indicator ${live ? 'live' : ''}" aria-hidden="true"></span>
+        <span class="status-indicator ${isOn ? 'live' : ''}" aria-hidden="true"></span>
         <div class="profile-info">
           <strong>${escapeHtml(p.name)}</strong>
           <small>${escapeHtml(subtitle)}</small>
         </div>
-        ${
-          p.id !== 'default'
-            ? `<button type="button" class="delete" data-id="${escapeHtml(p.id)}" title="Удалить" aria-label="Удалить профиль">×</button>`
-            : ''
-        }
+        <div class="profile-actions">
+          <button type="button" class="delete" data-id="${escapeHtml(p.id)}" title="Удалить" aria-label="Удалить профиль">×</button>
+          <label class="switch" title="${isOn ? 'Выключить' : 'Включить'}">
+            <input type="checkbox" role="switch" ${isOn ? 'checked' : ''} aria-label="Прокси «${escapeHtml(p.name)}»">
+            <span class="switch-slider" aria-hidden="true"></span>
+          </label>
+        </div>
       `;
 
-      div.onclick = (e) => {
-        if (e.target.closest('.delete')) return;
-        chrome.runtime.sendMessage({ action: 'activate', id: p.id }).then(() => {
-          setTimeout(() => render(), 80);
-        });
-      };
-
-      const deleteBtn = div.querySelector('.delete');
-      if (deleteBtn) {
-        deleteBtn.onclick = (e) => {
-          e.stopPropagation();
-          if (!confirm(`Удалить профиль «${p.name}»?`)) return;
-
-          const updatedProfiles = profiles.filter((x) => x.id !== p.id);
-          chrome.runtime.sendMessage({ action: 'saveProfiles', profiles: updatedProfiles }).then(() => {
-            const afterDelete = () => {
-              viewMode = null;
-              setTimeout(() => render(), 80);
-            };
-            if (isActive) {
-              chrome.runtime.sendMessage({ action: 'activate', id: 'default' }).then(afterDelete);
-            } else {
-              afterDelete();
+      const switchInput = div.querySelector('input[type="checkbox"]');
+      switchInput.addEventListener('change', () => {
+        const turnOn = switchInput.checked;
+        if (turnOn) {
+          profilesDiv.querySelectorAll('input[type="checkbox"]').forEach((el) => {
+            if (el !== switchInput) el.checked = false;
+          });
+          profilesDiv.querySelectorAll('.profile').forEach((el) => {
+            if (el !== div) {
+              el.classList.remove('active');
+              el.querySelector('.status-indicator')?.classList.remove('live');
             }
           });
-        };
-      }
+          div.classList.add('active');
+          div.querySelector('.status-indicator')?.classList.add('live');
+        } else {
+          div.classList.remove('active');
+          div.querySelector('.status-indicator')?.classList.remove('live');
+        }
+
+        switchInput.disabled = true;
+        const done = turnOn ? enableProfile(p.id) : disableProxy();
+        done.finally(() => {
+          switchInput.disabled = false;
+        });
+      });
+
+      const deleteBtn = div.querySelector('.delete');
+      deleteBtn.onclick = (e) => {
+        e.stopPropagation();
+        if (!confirm(`Удалить профиль «${p.name}»?`)) return;
+
+        const updatedProfiles = profiles.filter((x) => x.id !== p.id);
+        chrome.runtime.sendMessage({ action: 'saveProfiles', profiles: updatedProfiles }).then(() => {
+          const afterDelete = () => {
+            viewMode = null;
+            setTimeout(() => render(), 80);
+          };
+          if (isOn) {
+            chrome.runtime.sendMessage({ action: 'stopProxy' }).then(afterDelete);
+          } else {
+            afterDelete();
+          }
+        });
+      };
 
       profilesDiv.appendChild(div);
     });
