@@ -53,8 +53,9 @@
     .brand img {
       width: 28px;
       height: 28px;
-      border-radius: 8px;
+      border-radius: 0;
       flex-shrink: 0;
+      display: block;
     }
 
     .brand h1 {
@@ -143,6 +144,100 @@
       color: var(--muted);
     }
 
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .section-head .section-label {
+      margin: 0;
+    }
+
+    .menu-wrap {
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .icon-btn {
+      width: 28px;
+      height: 28px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      flex-shrink: 0;
+      padding: 0;
+    }
+
+    .icon-btn svg {
+      width: 16px;
+      height: 16px;
+      display: block;
+    }
+
+    .icon-btn:hover {
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+
+    .icon-btn.danger:hover {
+      background: var(--danger-soft);
+      color: var(--danger);
+    }
+
+    .menu-dropdown {
+      display: none;
+      position: absolute;
+      right: 0;
+      top: calc(100% + 4px);
+      min-width: 160px;
+      padding: 6px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      box-shadow: 0 8px 24px rgba(26, 43, 40, 0.12);
+      z-index: 20;
+    }
+
+    .menu-dropdown.open {
+      display: block;
+    }
+
+    .menu-dropdown button {
+      width: 100%;
+      display: block;
+      text-align: left;
+      border: none;
+      background: transparent;
+      color: var(--text);
+      font: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 8px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    .menu-dropdown button:hover {
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+
+    .menu-dropdown button.danger {
+      color: var(--danger);
+    }
+
+    .menu-dropdown button.danger:hover {
+      background: var(--danger-soft);
+    }
+
     #profiles {
       display: flex;
       flex-direction: column;
@@ -161,13 +256,7 @@
       border: 1px solid var(--border);
       border-radius: var(--radius);
       box-shadow: var(--shadow);
-      cursor: pointer;
       transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
-    }
-
-    .profile:hover {
-      border-color: #b7cbc5;
-      background: #fbfdfe;
     }
 
     .profile.active {
@@ -186,6 +275,9 @@
       font-size: 13px;
       font-weight: 650;
       margin-bottom: 2px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .profile-info small {
@@ -210,25 +302,67 @@
       box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.18);
     }
 
-    .delete {
-      width: 28px;
-      height: 28px;
-      display: inline-flex;
+    .profile-actions {
+      display: flex;
       align-items: center;
-      justify-content: center;
-      border: none;
-      border-radius: 8px;
-      background: transparent;
-      color: var(--muted);
-      font-size: 18px;
-      line-height: 1;
-      cursor: pointer;
+      gap: 6px;
       flex-shrink: 0;
+      margin-left: auto;
     }
 
-    .delete:hover {
-      background: var(--danger-soft);
-      color: var(--danger);
+    .switch {
+      position: relative;
+      display: inline-flex;
+      width: 40px;
+      height: 24px;
+      flex-shrink: 0;
+      cursor: pointer;
+    }
+
+    .switch input {
+      position: absolute;
+      opacity: 0;
+      width: 0;
+      height: 0;
+      margin: 0;
+    }
+
+    .switch-slider {
+      position: absolute;
+      inset: 0;
+      border-radius: 999px;
+      background: #cbd5d1;
+      transition: background 0.15s;
+    }
+
+    .switch-slider::before {
+      content: "";
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 1px 2px rgba(26, 43, 40, 0.2);
+      transition: transform 0.15s;
+    }
+
+    .switch input:checked + .switch-slider {
+      background: var(--accent);
+    }
+
+    .switch input:checked + .switch-slider::before {
+      transform: translateX(16px);
+    }
+
+    .switch input:focus-visible + .switch-slider {
+      box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.25);
+    }
+
+    .switch input:disabled + .switch-slider {
+      opacity: 0.5;
+      cursor: not-allowed;
     }
 
     .form {
@@ -270,10 +404,26 @@
       transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
     }
 
+    select {
+      -webkit-appearance: none;
+      appearance: none;
+      padding-right: 32px;
+      border-radius: var(--radius-sm);
+      background-color: #fbfcfc;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%235c726c' d='M1.4.6 6 5.2 10.6.6 12 2 6 8 0 2z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      cursor: pointer;
+    }
+
     input:focus, select:focus {
       border-color: var(--accent);
-      background: #fff;
+      background-color: #fff;
       box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.15);
+    }
+
+    select:focus {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%230d9488' d='M1.4.6 6 5.2 10.6.6 12 2 6 8 0 2z'/%3E%3C/svg%3E");
     }
 
     .hint {
@@ -295,6 +445,41 @@
     }
 
     .toast.show { display: block; }
+
+    .view { display: none; }
+    .view.active { display: block; }
+
+    .back-row {
+      margin: 0 0 10px;
+    }
+
+    .back-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 0;
+      border: none;
+      background: none;
+      color: var(--accent);
+      font: inherit;
+      font-weight: 650;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .back-btn:hover {
+      color: var(--accent-hover);
+      text-decoration: underline;
+    }
+
+    .back-btn.hidden {
+      display: none;
+    }
+
+    #showAddBtn {
+      width: 100%;
+      margin-top: 4px;
+    }
   </style>
 </head>
 <body>
@@ -312,37 +497,63 @@
     <button id="stopBtn" class="btn btn-stop" type="button" title="Отключить прокси">Стоп</button>
   </header>
 
-  <p class="section-label">Профили</p>
-  <div id="profiles"></div>
-
-  <p class="section-label">Новый профиль</p>
-  <div class="form">
-    <p class="hint">Сохраняется только на этом устройстве. Черновик формы пишется автоматически.</p>
-    <div class="field">
-      <label for="name">Название</label>
-      <input type="text" id="name" placeholder="Работа / VPN" autocomplete="off">
-    </div>
-    <div class="row">
-      <div class="field">
-        <label for="type">Тип</label>
-        <select id="type">
-          <option value="http">HTTP</option>
-          <option value="socks5">SOCKS5</option>
-        </select>
-      </div>
-      <div class="field">
-        <label for="port">Порт</label>
-        <input type="text" id="port" placeholder="8080" inputmode="numeric" autocomplete="off">
+  <section id="viewList" class="view">
+    <div class="section-head">
+      <p class="section-label">Профили</p>
+      <div class="menu-wrap">
+        <button id="profilesMenuBtn" class="icon-btn" type="button" title="Меню" aria-label="Меню профилей" aria-haspopup="true" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <circle cx="12" cy="5" r="1.5" fill="currentColor" stroke="none"/>
+            <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/>
+            <circle cx="12" cy="19" r="1.5" fill="currentColor" stroke="none"/>
+          </svg>
+        </button>
+        <div id="profilesMenu" class="menu-dropdown" role="menu">
+          <button type="button" id="menuExport" role="menuitem">Экспорт</button>
+          <button type="button" id="menuImport" role="menuitem">Загрузить</button>
+          <button type="button" id="menuDeleteAll" class="danger" role="menuitem">Удалить все</button>
+        </div>
       </div>
     </div>
-    <div class="field">
-      <label for="host">Хост / IP</label>
-      <input type="text" id="host" placeholder="1.2.3.4" autocomplete="off">
-    </div>
-    <button id="add" class="btn btn-primary" type="button" disabled>Добавить профиль</button>
-    <div id="toast" class="toast" role="status"></div>
-  </div>
+    <div id="profiles"></div>
+    <p id="profilesEmpty" class="hint" hidden>Нет профилей. Загрузите список через меню или добавьте вручную.</p>
+    <input type="file" id="importFile" accept=".txt,text/plain" hidden>
+    <button id="showAddBtn" class="btn btn-primary" type="button">Добавить</button>
+  </section>
 
-  <script src="popup.js"></script>
+  <section id="viewForm" class="view">
+    <div class="back-row">
+      <button id="backBtn" class="back-btn hidden" type="button">← Назад</button>
+    </div>
+    <p class="section-label" id="formTitle">Настройки прокси</p>
+    <div class="form">
+      <p class="hint">Сохраняется только на этом устройстве. Черновик формы пишется автоматически.</p>
+      <div class="field">
+        <label for="name">Название</label>
+        <input type="text" id="name" placeholder="Введите название" autocomplete="off">
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="type">Тип</label>
+          <select id="type">
+            <option value="http">HTTP</option>
+            <option value="socks4">SOCKS4</option>
+            <option value="socks5">SOCKS5</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="port">Порт</label>
+          <input type="text" id="port" placeholder="8080" inputmode="numeric" autocomplete="off">
+        </div>
+      </div>
+      <div class="field">
+        <label for="host">Хост / IP</label>
+        <input type="text" id="host" placeholder="1.2.3.4" autocomplete="off">
+      </div>
+      <button id="add" class="btn btn-primary" type="button" disabled>Добавить профиль</button>
+    </div>
+  </section>
+
+  <div id="toast" class="toast" role="status"></div>
 </body>
 </html>
