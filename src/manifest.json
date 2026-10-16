@@ -8,7 +8,8 @@
     "storage"
   ],
   "host_permissions": [
-    "https://www.gstatic.com/*"
+    "https://www.gstatic.com/*",
+    "https://ipwho.is/*"
   ],
   "background": {
     "service_worker": "background.js"

@@ -63,16 +63,24 @@ describe('probeProfile / checkAllProfiles', () => {
     const health = await checkAllProfiles(profiles, 'b', {
       fetchFn,
       settleMs: 0,
-      timeoutMs: 500
+      timeoutMs: 500,
+      lookupCountryFn: async () => ({ countryCode: 'US', country: 'United States', local: false })
     });
 
     expect(health.byId.a.ok).toBe(true);
+    expect(health.byId.a.countryCode).toBe('US');
     expect(health.byId.b.ok).toBe(false);
     expect(health.running).toBe(false);
+    expect(health.checkingId).toBeNull();
     expect(chrome.proxy.settings._getValue().mode).toBe('system');
   });
 
   it('createEmptyHealth', () => {
-    expect(createEmptyHealth()).toEqual({ running: false, checkedAt: null, byId: {} });
+    expect(createEmptyHealth()).toEqual({
+      running: false,
+      checkedAt: null,
+      checkingId: null,
+      byId: {}
+    });
   });
 });

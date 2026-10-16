@@ -1,4 +1,5 @@
 import { buildProxyConfig } from './proxy.js';
+import { lookupCountry } from './geo.js';
 
 export const HEALTH_KEY = 'proxy_health';
 export const HEALTH_RUNNING_KEY = 'proxy_health_running';
@@ -9,7 +10,7 @@ export const CHECK_TIMEOUT_MS = 5000;
 export const PROXY_SETTLE_MS = 200;
 
 export function createEmptyHealth() {
-  return { running: false, checkedAt: null, byId: {} };
+  return { running: false, checkedAt: null, checkingId: null, byId: {} };
 }
 
 function delay(ms) {
@@ -73,6 +74,7 @@ export async function loadHealth() {
     ...createEmptyHealth(),
     ...stored,
     running: Boolean(data[HEALTH_RUNNING_KEY]),
+    checkingId: stored.checkingId || null,
     byId: stored.byId || {}
   };
 }
@@ -81,6 +83,7 @@ export async function saveHealth(health) {
   await chrome.storage.local.set({
     [HEALTH_KEY]: {
       checkedAt: health.checkedAt,
+      checkingId: health.checkingId || null,
       byId: health.byId || {}
     },
     [HEALTH_RUNNING_KEY]: Boolean(health.running)
@@ -92,26 +95,40 @@ export async function saveHealth(health) {
  * Проверить все кастомные профили, восстановить activeId.
  * @param {object[]} profiles
  * @param {string} activeId
- * @param {{ onProgress?: (health) => void, fetchFn?: typeof fetch }} [opts]
+ * @param {{ onProgress?: (health) => void, fetchFn?: typeof fetch, lookupCountryFn?: typeof lookupCountry }} [opts]
  */
 export async function checkAllProfiles(profiles, activeId, opts = {}) {
   const customs = (profiles || []).filter((p) => p && p.id !== 'default' && p.type !== 'none');
+  const lookupFn = opts.lookupCountryFn || lookupCountry;
   const health = {
     running: true,
     checkedAt: null,
-    byId: { ...(await loadHealth()).byId }
+    checkingId: null,
+    byId: {}
   };
   await saveHealth(health);
   if (opts.onProgress) opts.onProgress(health);
 
   for (const profile of customs) {
+    health.checkingId = profile.id;
+    await saveHealth(health);
+    if (opts.onProgress) opts.onProgress(health);
+
+    // Geo напрямую по IP (не через проверяемый прокси)
+    await applyProxySettings({ type: 'none' });
+    const geo = await lookupFn(profile.host, { fetchFn: opts.fetchFn });
     const result = await probeProfile(profile, opts);
+
     health.byId[profile.id] = {
       ok: result.ok,
       ms: result.ms,
       error: result.error,
-      checkedAt: Date.now()
+      checkedAt: Date.now(),
+      countryCode: geo.countryCode || null,
+      country: geo.country || null,
+      local: Boolean(geo.local)
     };
+    health.checkingId = null;
     await saveHealth(health);
     if (opts.onProgress) opts.onProgress(health);
   }
@@ -126,6 +143,7 @@ export async function checkAllProfiles(profiles, activeId, opts = {}) {
   }
 
   health.running = false;
+  health.checkingId = null;
   health.checkedAt = Date.now();
   await saveHealth(health);
   if (opts.onProgress) opts.onProgress(health);

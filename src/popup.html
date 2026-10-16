@@ -227,11 +227,21 @@
       border: 1px solid var(--border);
       border-radius: var(--radius-sm);
       box-shadow: 0 8px 24px rgba(26, 43, 40, 0.12);
-      z-index: 20;
+      z-index: 40;
     }
 
     .menu-dropdown.open {
       display: block;
+    }
+
+    .menu-dropdown.item-menu.open {
+      position: fixed;
+      z-index: 100;
+    }
+
+    .profile.menu-open {
+      position: relative;
+      z-index: 50;
     }
 
     .menu-dropdown button {
@@ -265,10 +275,102 @@
     #profiles {
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 10px;
       margin-bottom: 14px;
-      max-height: 220px;
+      max-height: 260px;
       overflow-y: auto;
+      overflow-x: hidden;
+      padding-right: 2px;
+      scrollbar-width: thin;
+      scrollbar-color: #b7c9c3 transparent;
+    }
+
+    #profiles::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    #profiles::-webkit-scrollbar-track {
+      background: transparent;
+      margin: 4px 0;
+    }
+
+    #profiles::-webkit-scrollbar-thumb {
+      background: #b7c9c3;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      background-clip: padding-box;
+    }
+
+    #profiles::-webkit-scrollbar-thumb:hover {
+      background: #8fa89f;
+      background-clip: padding-box;
+    }
+
+    .profile-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .profile-group-label {
+      margin: 0;
+      font-size: 11px;
+      font-weight: 650;
+      letter-spacing: 0.03em;
+      color: var(--muted);
+    }
+
+    .profile-group-label .count {
+      font-weight: 700;
+      color: var(--text);
+      opacity: 0.7;
+    }
+
+    .dead-group {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.45);
+      overflow: hidden;
+    }
+
+    .dead-group > summary {
+      list-style: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      font-size: 11px;
+      font-weight: 650;
+      letter-spacing: 0.03em;
+      color: var(--muted);
+      user-select: none;
+    }
+
+    .dead-group > summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .dead-group > summary::before {
+      content: "";
+      width: 0;
+      height: 0;
+      border-top: 4px solid transparent;
+      border-bottom: 4px solid transparent;
+      border-left: 5px solid var(--muted);
+      transition: transform 0.15s;
+      flex-shrink: 0;
+    }
+
+    .dead-group[open] > summary::before {
+      transform: rotate(90deg);
+    }
+
+    .dead-group .dead-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 0 8px 8px;
     }
 
     .profile {
@@ -280,13 +382,24 @@
       border: 1px solid var(--border);
       border-radius: var(--radius);
       box-shadow: var(--shadow);
-      transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+      transition: border-color 0.15s, background 0.15s, box-shadow 0.15s, opacity 0.2s;
     }
 
     .profile.active {
       border-color: var(--accent);
       background: var(--accent-soft);
       box-shadow: 0 0 0 1px rgba(13, 148, 136, 0.2);
+    }
+
+    .profile.checking {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(13, 148, 136, 0.18);
+      animation: check-pulse 1.1s ease-in-out infinite;
+    }
+
+    @keyframes check-pulse {
+      0%, 100% { background: var(--surface); }
+      50% { background: var(--accent-soft); }
     }
 
     .profile-info {
@@ -337,6 +450,20 @@
       opacity: 0.72;
     }
 
+    .profile-endpoint {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      min-width: 0;
+    }
+
+    .profile-flag {
+      flex-shrink: 0;
+      font-size: 12px;
+      line-height: 1;
+      font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
+    }
+
     .profile-info small {
       display: block;
       color: var(--muted);
@@ -344,6 +471,7 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      min-width: 0;
     }
 
     .status-indicator {
