@@ -1,6 +1,6 @@
 {
   "name": "Proxy Manager",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Простой прокси-менеджер: HTTP/SOCKS4/SOCKS5, профили, проверка",
   "manifest_version": 3,
   "permissions": [
