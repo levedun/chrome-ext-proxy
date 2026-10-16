@@ -560,13 +560,19 @@ document.addEventListener('DOMContentLoaded', () => {
       const details = document.createElement('details');
       details.className = 'dead-group';
       details.open = deadGroupOpen;
-      details.addEventListener('toggle', () => {
-        deadGroupOpen = details.open;
-      });
 
       const summary = document.createElement('summary');
       summary.innerHTML = `Не работает <span class="count">${dead.length}</span>`;
       details.appendChild(summary);
+
+      details.addEventListener('toggle', () => {
+        deadGroupOpen = details.open;
+        if (!details.open) return;
+        // после раскрытия пересчитать скролл контейнера и показать список
+        requestAnimationFrame(() => {
+          summary.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        });
+      });
 
       const list = document.createElement('div');
       list.className = 'dead-list';
