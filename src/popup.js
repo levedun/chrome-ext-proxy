@@ -1,10 +1,11 @@
 document.addEventListener('DOMContentLoaded', () => {
-  // Защита от повторной инициализации (если скрипт всё же подключён дважды)
   if (window.__proxyManagerPopupInit) return;
   window.__proxyManagerPopupInit = true;
 
   const profilesDiv = document.getElementById('profiles');
   const addBtn = document.getElementById('add');
+  const showAddBtn = document.getElementById('showAddBtn');
+  const backBtn = document.getElementById('backBtn');
   const stopBtn = document.getElementById('stopBtn');
   const nameInput = document.getElementById('name');
   const typeInput = document.getElementById('type');
@@ -13,7 +14,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const statusPill = document.getElementById('statusPill');
   const statusText = document.getElementById('statusText');
   const toast = document.getElementById('toast');
+  const viewList = document.getElementById('viewList');
+  const viewForm = document.getElementById('viewForm');
+  const formTitle = document.getElementById('formTitle');
+
   let renderToken = 0;
+  /** 'list' | 'form' — form принудительно при клике «Добавить» */
+  let viewMode = null;
+  let latestProfiles = [];
 
   function escapeHtml(value) {
     return String(value)
@@ -22,6 +30,14 @@ document.addEventListener('DOMContentLoaded', () => {
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
+  }
+
+  function customProfiles(profiles) {
+    return (profiles || []).filter((p) => p.id !== 'default' && p.type !== 'none');
+  }
+
+  function hasCustomProfiles(profiles) {
+    return customProfiles(profiles).length > 0;
   }
 
   function showToast(message) {
@@ -76,15 +92,41 @@ document.addEventListener('DOMContentLoaded', () => {
     stopBtn.disabled = !isProxyActive;
   }
 
+  function setView(mode, profiles) {
+    const listAvailable = hasCustomProfiles(profiles);
+    viewMode = mode;
+
+    if (mode === 'list' && listAvailable) {
+      viewList.classList.add('active');
+      viewForm.classList.remove('active');
+      return;
+    }
+
+    viewList.classList.remove('active');
+    viewForm.classList.add('active');
+    const showBack = listAvailable && mode === 'form';
+    backBtn.classList.toggle('hidden', !showBack);
+    formTitle.textContent = showBack ? 'Новый профиль' : 'Настройки прокси';
+  }
+
+  function openFormView() {
+    setView('form', latestProfiles);
+  }
+
+  function openListOrForm(profiles) {
+    setView(hasCustomProfiles(profiles) ? 'list' : 'form', profiles);
+  }
+
   stopBtn.onclick = () => {
     chrome.runtime.sendMessage({ action: 'stopProxy' }).then(() => {
       setTimeout(() => render(), 80);
     });
   };
 
-  async function renderProfiles(profiles, activeId, token) {
-    profilesDiv.innerHTML = '';
+  showAddBtn.onclick = () => openFormView();
+  backBtn.onclick = () => setView('list', latestProfiles);
 
+  async function renderProfiles(profiles, activeId, token) {
     const statusRes = await chrome.runtime.sendMessage({ action: 'getProxyStatus' });
     if (token !== renderToken) return;
 
@@ -133,12 +175,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
           const updatedProfiles = profiles.filter((x) => x.id !== p.id);
           chrome.runtime.sendMessage({ action: 'saveProfiles', profiles: updatedProfiles }).then(() => {
-            if (isActive) {
-              chrome.runtime.sendMessage({ action: 'activate', id: 'default' }).then(() => {
-                setTimeout(() => render(), 80);
-              });
-            } else {
+            const afterDelete = () => {
+              viewMode = null;
               setTimeout(() => render(), 80);
+            };
+            if (isActive) {
+              chrome.runtime.sendMessage({ action: 'activate', id: 'default' }).then(afterDelete);
+            } else {
+              afterDelete();
             }
           });
         };
@@ -155,7 +199,18 @@ document.addEventListener('DOMContentLoaded', () => {
       chrome.runtime.sendMessage({ action: 'getActive' })
     ]);
     if (token !== renderToken) return;
-    await renderProfiles(profilesRes.profiles, activeRes.profile.id, token);
+
+    latestProfiles = profilesRes.profiles || [];
+
+    if (viewMode === null) {
+      openListOrForm(latestProfiles);
+    } else if (viewMode === 'list' && !hasCustomProfiles(latestProfiles)) {
+      setView('form', latestProfiles);
+    } else {
+      setView(viewMode, latestProfiles);
+    }
+
+    await renderProfiles(latestProfiles, activeRes.profile.id, token);
   }
 
   [nameInput, hostInput, portInput].forEach((input) => {
@@ -205,6 +260,7 @@ document.addEventListener('DOMContentLoaded', () => {
         chrome.storage.local.remove('formDraft');
         updateAddButton();
         showToast('Профиль сохранён.');
+        viewMode = 'list';
         render();
       });
     });
