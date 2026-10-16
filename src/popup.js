@@ -30,6 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const menuImport = document.getElementById('menuImport');
   const menuDeleteAll = document.getElementById('menuDeleteAll');
   const importFile = document.getElementById('importFile');
+  const profilesEmpty = document.getElementById('profilesEmpty');
 
   let renderToken = 0;
   /** 'list' | 'form' */
@@ -130,10 +131,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function setView(mode, profiles) {
-    const listAvailable = hasCustomProfiles(profiles);
     viewMode = mode;
 
-    if (mode === 'list' && listAvailable) {
+    // Список всегда доступен (даже пустой) — там меню импорта/экспорта
+    if (mode === 'list') {
       viewList.classList.add('active');
       viewForm.classList.remove('active');
       editingId = null;
@@ -142,12 +143,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     viewList.classList.remove('active');
     viewForm.classList.add('active');
-    const showBack = listAvailable && mode === 'form';
-    backBtn.classList.toggle('hidden', !showBack);
+    backBtn.classList.remove('hidden');
     if (editingId) {
       formTitle.textContent = 'Редактирование';
     } else {
-      formTitle.textContent = showBack ? 'Новый профиль' : 'Настройки прокси';
+      formTitle.textContent = 'Новый профиль';
     }
     updateAddButton();
   }
@@ -173,7 +173,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function openListOrForm(profiles) {
-    setView(hasCustomProfiles(profiles) ? 'list' : 'form', profiles);
+    setView('list', profiles);
   }
 
   function uniqueCopyName(baseName, profiles) {
@@ -213,7 +213,11 @@ document.addEventListener('DOMContentLoaded', () => {
     updateStatus(isProxyActive, activeProfile);
 
     profilesDiv.innerHTML = '';
-    customProfiles(profiles).forEach((p) => {
+    const customs = customProfiles(profiles);
+    if (profilesEmpty) {
+      profilesEmpty.hidden = customs.length > 0;
+    }
+    customs.forEach((p) => {
       const div = document.createElement('div');
       const isOn = isProxyActive && p.id === activeId;
       div.className = 'profile' + (isOn ? ' active' : '');
@@ -319,10 +323,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (viewMode === null) {
       openListOrForm(latestProfiles);
-    } else if (viewMode === 'list' && !hasCustomProfiles(latestProfiles)) {
-      setView('form', latestProfiles);
-    } else if (viewMode === 'form' && editingId) {
-      setView('form', latestProfiles);
     } else {
       setView(viewMode, latestProfiles);
     }
