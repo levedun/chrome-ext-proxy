@@ -23,3 +23,11 @@ npm run build
 ```bash
 npm run watch
 ```
+
+## Тесты
+
+```bash
+npm test
+```
+
+На каждый pull request GitHub Actions запускает `npm test` (см. `.github/workflows/ci.yml`).
