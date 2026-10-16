@@ -28,11 +28,20 @@ describe('normalizeProfiles', () => {
       { id: '1', name: 'A', type: 'http', host: '1.1.1.1', port: '80' },
       { id: '1', name: 'A-dup', type: 'http', host: '1.1.1.1', port: '80' },
       { id: 'x', name: 'Off', type: 'none' },
-      { id: 'default', name: 'Без прокси', type: 'none' }
+      { id: 'default', name: 'Без прокси', type: 'none' },
+      { id: 'default2', name: 'Без прокси', type: 'none' }
     ]);
     expect(result).toHaveLength(2);
-    expect(result[0].id).toBe('default');
+    expect(result[0]).toEqual({ id: 'default', name: 'Без прокси', type: 'none' });
     expect(result[1].name).toBe('A');
+  });
+
+  it('оставляет ровно один дефолт даже при нескольких none', () => {
+    const result = normalizeProfiles([
+      { id: 'default', name: 'Без прокси', type: 'none' },
+      { id: 'other', name: 'Без прокси', type: 'none' }
+    ]);
+    expect(result).toEqual([{ id: 'default', name: 'Без прокси', type: 'none' }]);
   });
 });
 
