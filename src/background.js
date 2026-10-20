@@ -8,6 +8,7 @@ import {
 } from './lib/profiles.js';
 import { setProxy, clearProxy, getProxyStatus } from './lib/proxy.js';
 import { checkAllProfiles, loadHealth } from './lib/health.js';
+import { updateActionIconForProfile } from './lib/action-icon.js';
 
 // Полиfill для Firefox (если будешь портировать)
 if (typeof browser !== 'undefined') {
@@ -16,19 +17,39 @@ if (typeof browser !== 'undefined') {
 
 let healthCheckPromise = null;
 
+async function syncActionIcon() {
+  const profile = await getActiveProfile();
+  await updateActionIconForProfile(profile);
+}
+
+chrome.runtime.onInstalled.addListener(() => {
+  syncActionIcon();
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  syncActionIcon();
+});
+
+// Service worker мог проснуться без onStartup — подтянуть иконку
+syncActionIcon();
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.action === 'getProfiles') {
     loadProfiles().then((profiles) => sendResponse({ profiles }));
   } else if (msg.action === 'getActive') {
     getActiveProfile().then((profile) => sendResponse({ profile }));
   } else if (msg.action === 'activate') {
-    activateProfile(msg.id, setProxy).then(() => sendResponse({ success: true }));
+    activateProfile(msg.id, setProxy)
+      .then((profile) => updateActionIconForProfile(profile))
+      .then(() => sendResponse({ success: true }));
   } else if (msg.action === 'saveProfiles') {
     saveProfiles(msg.profiles).then(() => sendResponse({ success: true }));
   } else if (msg.action === 'getProxyStatus') {
     getProxyStatus().then((status) => sendResponse(status));
   } else if (msg.action === 'stopProxy') {
-    stopProxy(clearProxy).then(() => sendResponse({ success: true }));
+    stopProxy(clearProxy)
+      .then(() => updateActionIconForProfile({ type: 'none' }))
+      .then(() => sendResponse({ success: true }));
   } else if (msg.action === 'getHealth') {
     loadHealth().then((health) => sendResponse({ health }));
   } else if (msg.action === 'checkProxies') {
@@ -43,8 +64,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       const activeId = activeData[ACTIVE_KEY] || 'default';
       return checkAllProfiles(profiles, activeId);
     })()
-      .then((health) => {
+      .then(async (health) => {
         healthCheckPromise = null;
+        await syncActionIcon();
         return health;
       })
       .catch(async (err) => {
@@ -52,6 +74,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const health = await loadHealth();
         health.running = false;
         await chrome.storage.local.set({ proxy_health_running: false });
+        await syncActionIcon();
         throw err;
       });
 
